@@ -592,6 +592,173 @@
             margin-bottom: 16px;
             font-size: 14px;
         }
+
+        /* Modal Styles */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 8px;
+            width: 600px;
+            max-width: 90vw;
+            max-height: 80vh;
+            overflow: hidden;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+
+        .modal-header {
+            background: #f9fafb;
+            padding: 20px;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h3 {
+            margin: 0;
+            color: #374151;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            color: #6b7280;
+            cursor: pointer;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+        }
+
+        .modal-close:hover {
+            background: #e5e7eb;
+            color: #374151;
+        }
+
+        .modal-body {
+            padding: 20px;
+            max-height: calc(80vh - 120px);
+            overflow-y: auto;
+        }
+
+        .modal-info {
+            background: #f0f9ff;
+            border: 1px solid #bae6fd;
+            border-radius: 6px;
+            padding: 16px;
+            margin-bottom: 20px;
+        }
+
+        .modal-info p {
+            margin: 0 0 8px 0;
+            color: #0c4a6e;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+
+        .modal-info p:last-child {
+            margin-bottom: 0;
+        }
+
+        .form-field {
+            margin-bottom: 20px;
+        }
+
+        .form-field label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #374151;
+            font-size: 14px;
+        }
+
+        .form-field input,
+        .form-field textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 14px;
+            color: #374151;
+            font-family: inherit;
+            box-sizing: border-box;
+        }
+
+        .form-field input:focus,
+        .form-field textarea:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .form-field textarea {
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 12px;
+            line-height: 1.4;
+            resize: vertical;
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+            margin-top: 24px;
+            padding-top: 20px;
+            border-top: 1px solid #e5e7eb;
+        }
+
+        .modal-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .cancel-btn {
+            background: #f3f4f6;
+            color: #374151;
+        }
+
+        .cancel-btn:hover {
+            background: #e5e7eb;
+        }
+
+        .save-btn {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .save-btn:hover {
+            background: #2563eb;
+        }
+
+        .save-btn:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+        }
     </style>
 </head>
 <body>
@@ -638,7 +805,10 @@
             
             <!-- Studio Access -->
             <div class="action-section">
-                <div class="section-title">Maestro Studio</div>
+                <div class="section-title">Test Generation</div>
+                <button class="action-btn codegen-btn" id="generate-test-btn" onclick="generateTest()" disabled>
+                    ✨ Generate Test
+                </button>
                 <button class="action-btn codegen-btn" id="open-studio-btn" onclick="openMaestroStudio()" disabled>
                     🎬 Open Maestro Studio
                 </button>
@@ -737,6 +907,39 @@
             </div>
         </div>
         <div class="terminal-output" id="terminal-output"></div>
+    </div>
+
+    <!-- Test Save Modal -->
+    <div id="test-save-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>📝 Save Generated Test</h3>
+                <button class="modal-close" onclick="closeTestSaveModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="modal-info">
+                    <p><strong>Instructions:</strong> Copy the test script from Maestro Studio and paste it into the "Test Script" field below.</p>
+                    <p>1. In Maestro Studio, click the "Copy" button to copy your generated test</p>
+                    <p>2. Paste the copied test script in the field below</p>
+                    <p>3. Give your test a name and save it</p>
+                </div>
+                
+                <div class="form-field">
+                    <label for="test-name-input">Test Name:</label>
+                    <input type="text" id="test-name-input" placeholder="e.g., user_login_flow" />
+                </div>
+                
+                <div class="form-field">
+                    <label for="test-script-input">Test Script:</label>
+                    <textarea id="test-script-input" rows="12" placeholder="Paste your Maestro test script here..."></textarea>
+                </div>
+                
+                <div class="modal-actions">
+                    <button class="modal-btn cancel-btn" onclick="closeTestSaveModal()">Cancel</button>
+                    <button class="modal-btn save-btn" onclick="saveGeneratedTest()">Save Test</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script src="renderer.js"></script>

@@ -114,13 +114,109 @@ ipcMain.handle('run-headed', async (event, scriptPath, options) => {
   })
 })
 
-ipcMain.handle('open-maestro-studio', async () => {
-  console.log('TODO(wire-cli): Open Maestro Studio')
-  return new Promise(resolve => {
-    setTimeout(() => {
-      resolve({ success: true, message: 'Maestro Studio opened (placeholder)' })
-    }, 300)
+// Function to check if Maestro Studio is already running
+async function checkMaestroStudioRunning() {
+  const http = require('http')
+  
+  return new Promise((resolve) => {
+    const req = http.request({
+      hostname: 'localhost',
+      port: 9999,
+      path: '/interact',
+      method: 'GET',
+      timeout: 2000
+    }, (res) => {
+      resolve(true) // Server is running
+    })
+    
+    req.on('error', () => {
+      resolve(false) // Server is not running
+    })
+    
+    req.on('timeout', () => {
+      resolve(false) // Server is not responding
+    })
+    
+    req.end()
   })
+}
+
+ipcMain.handle('open-maestro-studio', async (event, workingDir) => {
+  console.log('Opening Maestro Studio...')
+  const { spawn } = require('child_process')
+  const { shell } = require('electron')
+  
+  try {
+    // First check if studio is already running
+    const isRunning = await checkMaestroStudioRunning()
+    
+    if (isRunning) {
+      console.log('Maestro Studio is already running')
+      // Just open the browser
+      shell.openExternal('http://localhost:9999/interact')
+      return {
+        success: true,
+        message: 'Maestro Studio is already running',
+        alreadyRunning: true
+      }
+    }
+    
+    console.log(`Running: maestro studio in ${workingDir}`)
+    
+    return new Promise((resolve) => {
+      const process = spawn('maestro', ['studio'], {
+        cwd: workingDir,
+        stdio: ['inherit', 'pipe', 'pipe']
+      })
+      
+      let stdout = ''
+      let stderr = ''
+      
+      process.stdout.on('data', (data) => {
+        const output = data.toString()
+        stdout += output
+        console.log(`[maestro-studio]: ${output.trim()}`)
+        // Send real-time output to renderer
+        event.sender.send('maestro-studio-output', output)
+      })
+      
+      process.stderr.on('data', (data) => {
+        const output = data.toString()
+        stderr += output
+        console.error(`[maestro-studio ERROR]: ${output.trim()}`)
+        // Send error output to renderer
+        event.sender.send('maestro-studio-output', output)
+      })
+      
+      process.on('close', (code) => {
+        console.log(`Maestro Studio process exited with code: ${code}`)
+        resolve({ 
+          success: code === 0, 
+          message: code === 0 ? 'Maestro Studio started successfully' : `Maestro Studio failed with exit code ${code}`,
+          output: stdout
+        })
+      })
+      
+      process.on('error', (error) => {
+        console.error(`Maestro Studio process error: ${error.message}`)
+        resolve({ 
+          success: false, 
+          error: `Failed to execute maestro studio: ${error.message}` 
+        })
+      })
+      
+      // Open browser after a short delay to let studio start
+      setTimeout(() => {
+        console.log('Opening Maestro Studio in browser...')
+        shell.openExternal('http://localhost:9999/interact')
+      }, 3000)
+    })
+  } catch (error) {
+    return { 
+      success: false, 
+      error: `Error executing maestro studio: ${error.message}` 
+    }
+  }
 })
 
 ipcMain.handle('scan-maestro-tests', async (_, dirPath) => {
@@ -585,5 +681,35 @@ ipcMain.handle('load-settings', async () => {
 ipcMain.handle('save-settings', async (event, settings) => {
   saveSettings(settings)
   return true
+})
+
+// Test file management
+ipcMain.handle('save-test-file', async (event, filePath, content) => {
+  console.log(`Saving test file: ${filePath}`)
+  
+  try {
+    // Ensure the directory exists
+    const dirPath = path.dirname(filePath)
+    if (!fs.existsSync(dirPath)) {
+      fs.mkdirSync(dirPath, { recursive: true })
+      console.log(`Created directory: ${dirPath}`)
+    }
+    
+    // Write the test file
+    fs.writeFileSync(filePath, content, 'utf8')
+    console.log(`Test file saved successfully: ${filePath}`)
+    
+    return {
+      success: true,
+      message: `Test file saved: ${path.basename(filePath)}`
+    }
+    
+  } catch (error) {
+    console.error(`Error saving test file: ${error.message}`)
+    return {
+      success: false,
+      error: `Failed to save test file: ${error.message}`
+    }
+  }
 })
 

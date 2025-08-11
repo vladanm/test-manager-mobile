@@ -240,22 +240,63 @@ function selectUser(user) {
 }
 
 // Maestro Studio
-async function openMaestroStudio() {
+// Generate Test (Maestro Studio)
+async function generateTest() {
     if (!currentWorkingDir) {
         appendToTerminal('❌ Please select a working directory first\n', 'error');
         return;
     }
     
     try {
-        showToast('Opening Maestro Studio...', 'info');
-        // TODO(wire-cli): This should launch: maestro studio
-        const result = await window.electronAPI.openMaestroStudio();
-        showToast('TODO: open Maestro Studio via CLI', 'info');
-        console.log('Maestro Studio result:', result);
+        showToast('Starting Maestro Studio...', 'info');
+        appendToTerminal(`🎨 Starting Maestro Studio...\n`, 'info');
+        appendToTerminal(`📁 Working directory: ${currentWorkingDir}\n`);
+        appendToTerminal(`🚀 Command: maestro studio\n`);
+        appendToTerminal(`🌐 Browser will open: http://localhost:9999/interact\n\n`);
+        
+        // Set up event listeners for streaming output
+        window.electronAPI.onMaestroStudioOutput((event, output) => {
+            appendToTerminal(output);
+        });
+        
+        const result = await window.electronAPI.openMaestroStudio(currentWorkingDir);
+        
+        // Clean up event listeners
+        window.electronAPI.removeMaestroStudioListeners();
+        
+        if (result.success) {
+            if (result.alreadyRunning) {
+                appendToTerminal(`ℹ️ Maestro Studio is already running\n`, 'info');
+                appendToTerminal(`🌐 Studio available at: http://localhost:9999/interact\n`, 'info');
+                showToast('Maestro Studio is already running!', 'info');
+            } else {
+                appendToTerminal(`✅ Maestro Studio started successfully\n`, 'success');
+                appendToTerminal(`🌐 Studio should now be available at: http://localhost:9999/interact\n`, 'success');
+                showToast('Maestro Studio started!', 'success');
+            }
+            
+            // Show the test save modal after studio starts
+            setTimeout(() => {
+                showTestSaveModal();
+            }, 2000); // Short delay to let studio fully load
+        } else {
+            appendToTerminal(`❌ Maestro Studio failed: ${result.error}\n`, 'error');
+            showToast('Maestro Studio failed to start', 'error');
+        }
+        
     } catch (error) {
-        showToast('Error opening Maestro Studio', 'error');
+        appendToTerminal(`❌ Error starting Maestro Studio: ${error.message}\n`, 'error');
+        showToast('Error starting Maestro Studio', 'error');
         console.error('Maestro Studio error:', error);
+        
+        // Clean up event listeners in case of error
+        window.electronAPI.removeMaestroStudioListeners();
     }
+}
+
+// Legacy function - keeping for compatibility
+async function openMaestroStudio() {
+    return generateTest();
 }
 
 async function loadTestData() {
@@ -613,6 +654,7 @@ function updateUI() {
     
     // Enable/disable buttons based on working directory
     document.getElementById('open-studio-btn').disabled = !hasWorkingDir;
+    document.getElementById('generate-test-btn').disabled = !hasWorkingDir;
     
     if (hasWorkingDir) {
         // Force update test list when UI updates
@@ -702,3 +744,96 @@ window.createMissingMappings = createMissingMappings;
 window.showMappingStats = showMappingStats;
 window.emulatorRestart = emulatorRestart;
 window.installApk = installApk;
+window.generateTest = generateTest;
+
+// Modal functions
+function showTestSaveModal() {
+    const modal = document.getElementById('test-save-modal');
+    if (modal) {
+        modal.style.display = 'flex';
+        // Clear previous values
+        document.getElementById('test-name-input').value = '';
+        document.getElementById('test-script-input').value = '';
+        // Focus on the name input
+        setTimeout(() => {
+            document.getElementById('test-name-input').focus();
+        }, 100);
+        
+        // Add escape key listener
+        document.addEventListener('keydown', handleModalEscape);
+        
+        appendToTerminal(`📝 Test save dialog opened\n`, 'info');
+        appendToTerminal(`💡 Copy your generated test from Maestro Studio and paste it in the dialog\n`, 'info');
+    }
+}
+
+function closeTestSaveModal() {
+    const modal = document.getElementById('test-save-modal');
+    if (modal) {
+        modal.style.display = 'none';
+        // Remove escape key listener
+        document.removeEventListener('keydown', handleModalEscape);
+        appendToTerminal(`📝 Test save dialog closed\n`);
+    }
+}
+
+function handleModalEscape(event) {
+    if (event.key === 'Escape') {
+        closeTestSaveModal();
+    }
+}
+
+async function saveGeneratedTest() {
+    const testName = document.getElementById('test-name-input').value.trim();
+    const testScript = document.getElementById('test-script-input').value.trim();
+    
+    if (!testName) {
+        showToast('Please enter a test name', 'error');
+        return;
+    }
+    
+    if (!testScript) {
+        showToast('Please paste the test script', 'error');
+        return;
+    }
+    
+    if (!currentWorkingDir) {
+        showToast('No working directory selected', 'error');
+        return;
+    }
+    
+    try {
+        // Ensure test name ends with .yaml
+        const fileName = testName.endsWith('.yaml') ? testName : `${testName}.yaml`;
+        const filePath = `${currentWorkingDir}/.maestro/flows/core/${fileName}`;
+        
+        appendToTerminal(`💾 Saving test: ${fileName}\n`, 'info');
+        appendToTerminal(`📁 Location: ${filePath}\n`);
+        
+        // Save the test file using the Electron API
+        const result = await window.electronAPI.saveTestFile(filePath, testScript);
+        
+        if (result.success) {
+            appendToTerminal(`✅ Test saved successfully: ${fileName}\n`, 'success');
+            showToast('Test saved successfully!', 'success');
+            
+            // Close modal and refresh test list
+            closeTestSaveModal();
+            await loadTestData();
+            
+        } else {
+            appendToTerminal(`❌ Failed to save test: ${result.error}\n`, 'error');
+            showToast('Failed to save test', 'error');
+        }
+        
+    } catch (error) {
+        appendToTerminal(`❌ Error saving test: ${error.message}\n`, 'error');
+        showToast('Error saving test', 'error');
+        console.error('Save test error:', error);
+    }
+}
+
+// Export modal functions
+window.showTestSaveModal = showTestSaveModal;
+window.closeTestSaveModal = closeTestSaveModal;
+window.saveGeneratedTest = saveGeneratedTest;

@@ -13,8 +13,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   runHeaded: (scriptPath, options = {}) => ipcRenderer.invoke('run-headed', scriptPath, options),
   runTestE2E: (testName, workingDir) => ipcRenderer.invoke('run-test-e2e', testName, workingDir),
   
-  // Maestro Studio integration (placeholder)  
-  openMaestroStudio: () => ipcRenderer.invoke('open-maestro-studio'),
+  // Maestro Studio integration
+  openMaestroStudio: (workingDir) => ipcRenderer.invoke('open-maestro-studio', workingDir),
+  onMaestroStudioOutput: (callback) => ipcRenderer.on('maestro-studio-output', callback),
+  removeMaestroStudioListeners: () => {
+    ipcRenderer.removeAllListeners('maestro-studio-output')
+  },
   
   // Emulator restart
   emulatorRestart: () => ipcRenderer.invoke('emulator-restart'),
@@ -36,6 +40,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Settings persistence
   loadSettings: () => ipcRenderer.invoke('load-settings'),
   saveSettings: (settings) => ipcRenderer.invoke('save-settings', settings),
+  
+  // Test file management
+  saveTestFile: (filePath, content) => ipcRenderer.invoke('save-test-file', filePath, content),
   
   // APK installation
   installApk: (apkPath, workingDir) => ipcRenderer.invoke('install-apk', apkPath, workingDir),
