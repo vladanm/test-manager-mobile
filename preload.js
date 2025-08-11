@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   
   // Test execution (placeholder)
   runHeaded: (scriptPath, options = {}) => ipcRenderer.invoke('run-headed', scriptPath, options),
+  runTestE2E: (testName, workingDir) => ipcRenderer.invoke('run-test-e2e', testName, workingDir),
   
   // Maestro Studio integration (placeholder)  
   openMaestroStudio: () => ipcRenderer.invoke('open-maestro-studio'),
@@ -24,6 +25,23 @@ contextBridge.exposeInMainWorld('electronAPI', {
   removeEmulatorRestartListeners: () => {
     ipcRenderer.removeAllListeners('emulator-restart-output')
     ipcRenderer.removeAllListeners('emulator-restart-complete')
+  },
+  
+  // Test E2E event listeners
+  onTestE2EOutput: (callback) => ipcRenderer.on('test-e2e-output', callback),
+  removeTestE2EListeners: () => {
+    ipcRenderer.removeAllListeners('test-e2e-output')
+  },
+  
+  // Settings persistence
+  loadSettings: () => ipcRenderer.invoke('load-settings'),
+  saveSettings: (settings) => ipcRenderer.invoke('save-settings', settings),
+  
+  // APK installation
+  installApk: (apkPath, workingDir) => ipcRenderer.invoke('install-apk', apkPath, workingDir),
+  onApkInstallOutput: (callback) => ipcRenderer.on('apk-install-output', callback),
+  removeApkInstallListeners: () => {
+    ipcRenderer.removeAllListeners('apk-install-output')
   },
   
   // Mock data for UI development

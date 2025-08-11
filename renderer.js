@@ -5,6 +5,8 @@ let currentWorkingDir = null;
 let currentEnvironment = 'dev';
 let currentUser = '1';
 let testFiles = [];
+let apkFiles = [];
+let saveSettingsTimeout = null;
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', async () => {
@@ -12,6 +14,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // Ensure we start on the tests tab
     switchTab('tests');
+    
+    // Load saved settings
+    await loadSavedSettings();
     
     updateUI();
     
@@ -34,6 +39,115 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 });
 
+// Settings persistence functions
+async function loadSavedSettings() {
+    try {
+        const settings = await window.electronAPI.loadSettings();
+        
+        if (settings.workingDirectory) {
+            appendToTerminal(`🔄 Restoring workspace...\n`);
+            appendToTerminal(`📁 Last directory: ${settings.workingDirectory}\n`);
+            appendToTerminal(`🌍 Last environment: ${settings.environment}\n`);
+            appendToTerminal(`👤 Last user: USER ${settings.user}\n`);
+            if (settings.lastApkInstalled) {
+                appendToTerminal(`📱 Last APK: ${settings.lastApkInstalled}\n`);
+            }
+            
+            await setWorkingDirectory(settings.workingDirectory);
+        }
+        
+        if (settings.environment) {
+            selectEnvironment(settings.environment);
+        }
+        
+        if (settings.user) {
+            selectUser(settings.user);
+        }
+        
+        if (settings.workingDirectory) {
+            appendToTerminal(`✅ Workspace restored successfully!\n`, 'success');
+            appendToTerminal(`💡 Ready to continue where you left off.\n\n`);
+            
+            // If there was a previous APK, check if it still exists and install it
+            if (settings.lastApkInstalled && currentWorkingDir) {
+                const apkExists = apkFiles.some(apk => apk.name === settings.lastApkInstalled);
+                if (apkExists) {
+                    appendToTerminal(`🔄 Re-installing previous APK: ${settings.lastApkInstalled}\n`, 'info');
+                    setTimeout(() => {
+                        installApk(settings.lastApkInstalled);
+                    }, 2000); // Delay to let workspace load complete
+                }
+            }
+        } else {
+            appendToTerminal(`📁 No previous workspace found. Select a directory to get started.\n\n`);
+        }
+        
+    } catch (error) {
+        console.error('Error loading settings:', error);
+        appendToTerminal(`⚠️ Could not restore previous workspace\n`, 'warning');
+    }
+}
+
+async function saveCurrentSettings() {
+    // Clear any existing timeout
+    if (saveSettingsTimeout) {
+        clearTimeout(saveSettingsTimeout);
+    }
+    
+    // Set a new timeout to save settings after 500ms of inactivity
+    saveSettingsTimeout = setTimeout(async () => {
+        try {
+            const settings = {
+                workingDirectory: currentWorkingDir,
+                environment: currentEnvironment,
+                user: currentUser,
+                lastApkInstalled: apkFiles.length > 0 ? apkFiles[0].name : null,
+                lastSaved: new Date().toISOString()
+            };
+            
+            await window.electronAPI.saveSettings(settings);
+            console.log('Settings saved:', settings);
+            
+        } catch (error) {
+            console.error('Error saving settings:', error);
+        }
+    }, 500);
+}
+
+async function setWorkingDirectory(dirPath) {
+    appendToTerminal(`📁 Checking directory: ${dirPath}\n`);
+    
+    try {
+        const validation = await window.electronAPI.validateMaestroProject(dirPath);
+        
+        if (!validation.valid) {
+            updateDirectoryStatus(dirPath, false, validation.message || 'Invalid Maestro project');
+            appendToTerminal(`❌ Directory validation failed: ${validation.message}\n`, 'error');
+            return;
+        }
+        
+        appendToTerminal(`✅ Directory validation passed\n`, 'success');
+        currentWorkingDir = dirPath;
+        updateDirectoryStatus(dirPath, true, 'Valid Maestro project');
+        
+        // Load test data
+        appendToTerminal(`🔄 Loading test data...\n`);
+        await loadTestData();
+        
+        // Save settings whenever working directory changes
+        await saveCurrentSettings();
+        
+        appendToTerminal(`✅ Working directory set: ${dirPath}\n`, 'success');
+        
+    } catch (error) {
+        currentWorkingDir = null;
+        updateDirectoryStatus(dirPath, false, error.message);
+        appendToTerminal(`❌ Error setting working directory: ${error.message}\n`, 'error');
+        // Ensure UI is updated even on error
+        updateUI();
+    }
+}
+
 // Directory Selection
 async function selectDirectory() {
     try {
@@ -41,22 +155,10 @@ async function selectDirectory() {
         
         if (!result.canceled && result.filePaths.length > 0) {
             const dirPath = result.filePaths[0];
-            currentWorkingDir = dirPath;
-            
-            // Update UI
-            document.getElementById('current-dir').textContent = dirPath;
-            
-            // Mock validation
-            const validation = await window.electronAPI.validateMaestroProject(dirPath);
-            if (validation.valid) {
-                updateDirectoryStatus(dirPath, true, 'Valid Maestro project');
-                await loadTestData();
-                showToast('Valid Maestro project detected!', 'success');
-            } else {
-                showToast('Invalid Maestro project', 'error');
-            }
+            await setWorkingDirectory(dirPath);
         }
     } catch (error) {
+        appendToTerminal(`❌ Error selecting directory: ${error.message}\n`, 'error');
         showToast('Error selecting directory', 'error');
         console.error('Directory selection error:', error);
     }
@@ -99,6 +201,9 @@ function clearWorkspace() {
     // Update workspace status
     document.getElementById('workspace-status').textContent = 'Not loaded';
     
+    // Save cleared state
+    saveCurrentSettings();
+    
     appendToTerminal('🗑️ Workspace cleared\n', 'warning');
     appendToTerminal('📁 Select a directory to get started.\n\n');
 }
@@ -114,6 +219,9 @@ function selectEnvironment(env) {
     }
     
     appendToTerminal(`🌍 Environment changed to: ${env.toUpperCase()}\n`);
+    
+    // Save settings when environment changes
+    saveCurrentSettings();
 }
 
 function selectUser(user) {
@@ -126,6 +234,9 @@ function selectUser(user) {
     }
     
     appendToTerminal(`👤 User changed to: USER ${user}\n`);
+    
+    // Save settings when user changes
+    saveCurrentSettings();
 }
 
 // Maestro Studio
@@ -153,9 +264,17 @@ async function loadTestData() {
     try {
         const result = await window.electronAPI.scanMaestroTests(currentWorkingDir);
         testFiles = result.tests;
+        apkFiles = result.apkFiles || [];
         
         updateTestList();
-        appendToTerminal(`✅ ${result.message}\n`, result.tests.length > 0 ? 'success' : 'warning');
+        appendToTerminal(`✅ ${result.message}\n`, (result.tests.length > 0 || result.apkFiles.length > 0) ? 'success' : 'warning');
+        
+        // Auto-install APK if found
+        if (apkFiles.length > 0) {
+            const apkFile = apkFiles[0]; // Install the first APK found
+            appendToTerminal(`📱 APK file detected: ${apkFile.name}\n`, 'info');
+            await installApk(apkFile.name);
+        }
         
     } catch (error) {
         appendToTerminal(`❌ Error loading test data: ${error.message}\n`, 'error');
@@ -197,7 +316,7 @@ function updateTestList() {
                     ${formatDate(test.lastModified)}
                 </div>
                 <div class="test-actions">
-                    <button class="test-action-btn headed-btn" data-action="run-headed" data-test="${test.name}">👁 HEADED</button>
+                    <button class="test-action-btn headed-btn" data-action="run-headed" data-test="${test.name}">👁 RUN TEST</button>
                 </div>
             </div>
         `;
@@ -212,14 +331,75 @@ async function runHeaded(testName) {
     }
     
     try {
-        showToast('Running headed test...', 'info');
-        // TODO(wire-cli): This should run: maestro test --device=<device> <scriptPath>
-        const result = await window.electronAPI.runHeaded(testName);
-        showToast('TODO: run headed via Maestro CLI', 'info');
-        console.log('Run headed result:', result);
+        showToast('Running test...', 'info');
+        appendToTerminal(`🧪 Running test: ${testName}\n`, 'info');
+        appendToTerminal(`📁 Working directory: ${currentWorkingDir}\n`);
+        appendToTerminal(`🚀 Command: npm run test:e2e .maestro/flows/core/${testName}\n\n`);
+        
+        // Set up event listeners for streaming output
+        window.electronAPI.onTestE2EOutput((event, output) => {
+            appendToTerminal(output);
+        });
+        
+        const result = await window.electronAPI.runTestE2E(testName, currentWorkingDir);
+        
+        // Clean up event listeners
+        window.electronAPI.removeTestE2EListeners();
+        
+        if (result.success) {
+            appendToTerminal(`✅ Test completed successfully\n`, 'success');
+            showToast('Test completed successfully!', 'success');
+        } else {
+            appendToTerminal(`❌ Test failed: ${result.error}\n`, 'error');
+            showToast('Test failed', 'error');
+        }
+        
     } catch (error) {
-        showToast('Error running headed test', 'error');
-        console.error('Run headed error:', error);
+        appendToTerminal(`❌ Error running test: ${error.message}\n`, 'error');
+        showToast('Error running test', 'error');
+        console.error('Run test error:', error);
+        
+        // Clean up event listeners in case of error
+        window.electronAPI.removeTestE2EListeners();
+    }
+}
+
+// APK Installation
+async function installApk(apkFileName) {
+    if (!currentWorkingDir) {
+        appendToTerminal('❌ Please select a working directory first\n', 'error');
+        return;
+    }
+    
+    try {
+        showToast('Installing APK...', 'info');
+        appendToTerminal(`📱 Starting APK installation: ${apkFileName}\n`, 'info');
+        
+        // Set up event listeners for streaming output
+        window.electronAPI.onApkInstallOutput((event, output) => {
+            appendToTerminal(output);
+        });
+        
+        const result = await window.electronAPI.installApk(apkFileName, currentWorkingDir);
+        
+        // Clean up event listeners
+        window.electronAPI.removeApkInstallListeners();
+        
+        if (result.success) {
+            appendToTerminal(`✅ APK installation completed successfully\n`, 'success');
+            showToast('APK installed successfully!', 'success');
+        } else {
+            appendToTerminal(`❌ APK installation failed: ${result.error}\n`, 'error');
+            showToast('APK installation failed', 'error');
+        }
+        
+    } catch (error) {
+        appendToTerminal(`❌ Error during APK installation: ${error.message}\n`, 'error');
+        showToast('Error installing APK', 'error');
+        console.error('APK installation error:', error);
+        
+        // Clean up event listeners in case of error
+        window.electronAPI.removeApkInstallListeners();
     }
 }
 
@@ -521,3 +701,4 @@ window.refreshTestCases = refreshTestCases;
 window.createMissingMappings = createMissingMappings;
 window.showMappingStats = showMappingStats;
 window.emulatorRestart = emulatorRestart;
+window.installApk = installApk;

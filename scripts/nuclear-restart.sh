@@ -187,42 +187,12 @@ fi
 print_status "Waiting for UI to be ready..."
 sleep 10
 
-# Step 6: Install/reinstall Kriptomat app
-print_status "Step 6: Checking Kriptomat app installation..."
+# Step 6: Emulator is ready for APK installation
+print_status "Step 6: Emulator is ready for APK installation"
+print_success "Emulator boot completed successfully"
 
-# Check if app is installed
-if $ADB_PATH shell pm list packages | grep -q "io.kriptomat.app"; then
-    print_status "Kriptomat app is installed"
-    
-    # Force stop the app
-    print_status "Force stopping app..."
-    $ADB_PATH shell am force-stop io.kriptomat.app
-    
-    # Clear app data
-    print_status "Clearing app data..."
-    $ADB_PATH shell pm clear io.kriptomat.app
-else
-    print_error "Kriptomat app not found!"
-    echo "You need to install the app first. Run:"
-    echo "cd /Users/vladanm/projects/km-mobile && npm run create:apk && npm run install:android"
-    exit 1
-fi
-
-# Step 7: Test app launch
-print_status "Step 7: Testing app launch..."
-$ADB_PATH shell am start -n io.kriptomat.app/.MainActivity
-sleep 5
-
-# Check if app is running
-if $ADB_PATH shell ps | grep -q "io.kriptomat.app"; then
-    print_success "App launched successfully"
-else
-    print_error "App failed to launch"
-    exit 1
-fi
-
-# Step 8: Test Maestro connection
-print_status "Step 8: Testing Maestro connection..."
+# Step 7: Test Maestro connection
+print_status "Step 7: Testing Maestro connection..."
 
 # Test if maestro can see the device
 if maestro --version > /dev/null 2>&1; then
@@ -250,7 +220,7 @@ echo "Environment Status:"
 echo "  • ANDROID_HOME: $ANDROID_HOME"
 echo "  • ADB Server: Running"
 echo "  • Emulator: Running ($AVD_NAME)"
-echo "  • Kriptomat App: Installed and tested"
+echo "  • Emulator: Ready for APK installation"
 echo "  • Maestro: Available"
 echo ""
 print_success "System is ready for testing!"
@@ -259,8 +229,43 @@ echo "Now you can run:"
 echo "  npm run test:e2e .maestro/flows/core/vm1.yaml"
 echo ""
 
-# Optionally run the test if argument provided
+# Debug: Log parameters before APK check
+echo ""
+echo "================================================================"
+echo "DEBUG: Script parameters:"
+echo "  Number of arguments: $#"
+echo "  All arguments: $@"
 if [ $# -gt 0 ]; then
+    echo "  First argument: '$1'"
+    if [[ "$1" == *".apk" ]]; then
+        echo "  APK pattern match: TRUE"
+    else
+        echo "  APK pattern match: FALSE"
+    fi
+fi
+echo "================================================================"
+
+# Check if APK file argument provided for installation
+if [ $# -gt 0 ] && [[ "$1" == *".apk" ]]; then
+    APK_FILE="$1"
+    print_status "Installing APK: $(basename "$APK_FILE")"
+    echo ""
+    
+    if [ -f "$APK_FILE" ]; then
+        print_status "Running: adb install \"$APK_FILE\""
+        if $ADB_PATH install "$APK_FILE"; then
+            print_success "APK installation completed successfully!"
+        else
+            print_error "APK installation failed!"
+            exit 1
+        fi
+    else
+        print_error "APK file not found: $APK_FILE"
+        exit 1
+    fi
+    echo ""
+# Optionally run the test if argument provided (non-APK)
+elif [ $# -gt 0 ]; then
     print_status "Running test: $@"
     echo ""
     .maestro/test.sh "$@"
