@@ -1,20 +1,736 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <meta charset="UTF-8" />
-    <!-- https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP -->
-    <meta
-      http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'"
-    />
-    <meta
-      http-equiv="X-Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'"
-    />
-    <title>Hello from Electron renderer!</title>
-  </head>
-  <body>
-    <h1>Hello from Electron renderer!</h1>
-    <p>👋</p>
-  </body>
+<head>
+    <meta charset="UTF-8">
+    <title>🎬 Maestro Test Manager</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            background: #f5f5f5;
+            color: #374151;
+            overflow: hidden;
+            height: 100vh;
+        }
+        
+        /* Title Bar */
+        .title-bar {
+            background: #2563eb;
+            color: white;
+            padding: 15px 20px;
+            font-size: 18px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .title-text {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        /* Working Directory Selector */
+        .directory-selector {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            margin: 20px;
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .select-dir-btn {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.2s;
+        }
+        
+        .select-dir-btn:hover {
+            background: #2563eb;
+        }
+        
+        .current-dir {
+            flex: 1;
+            font-family: 'Monaco', 'Menlo', monospace;
+            background: #f9fafb;
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid #e5e7eb;
+            max-width: 300px;
+        }
+        
+        .env-dropdown, .user-dropdown {
+            padding: 8px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            background: white;
+            font-size: 13px;
+            font-weight: 500;
+            color: #374151;
+            cursor: pointer;
+            transition: border-color 0.2s;
+            min-width: 100px;
+        }
+        
+        .env-dropdown:hover, .user-dropdown:hover {
+            border-color: #9ca3af;
+        }
+        
+        .env-dropdown:focus, .user-dropdown:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+        
+        .dir-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+        }
+        
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+        
+        .status-valid { background: #10b981; }
+        .status-invalid { background: #ef4444; }
+        .status-unknown { background: #6b7280; }
+        
+        /* Main Layout */
+        .main-layout {
+            display: flex;
+            height: calc(100vh - 240px - 300px);
+            margin: 0 20px;
+            gap: 20px;
+            transition: height 0.3s ease;
+        }
+        
+        /* Left Panel - Quick Actions (Fixed) */
+        .left-panel-fixed {
+            width: 350px;
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 20px;
+            overflow-y: auto;
+            flex-shrink: 0;
+        }
+        
+        /* Right Panel - Tabs and Content */
+        .right-panel-fixed {
+            flex: 1;
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        .panel-title {
+            font-size: 16px;
+            font-weight: bold;
+            color: #374151;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .action-section {
+            margin-bottom: 30px;
+        }
+        
+        .section-title {
+            font-size: 14px;
+            font-weight: bold;
+            color: #6b7280;
+            margin-bottom: 10px;
+        }
+        
+        .action-btn {
+            width: 100%;
+            padding: 12px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        
+        .setup-btn {
+            background: #3b82f6;
+            color: white;
+        }
+        
+        .setup-btn:hover { background: #2563eb; }
+        
+        .otp-btn {
+            background: #10b981;
+            color: white;
+        }
+        
+        .otp-btn:hover { background: #059669; }
+        
+        .codegen-btn {
+            background: #8b5cf6;
+            color: white;
+        }
+        
+        .codegen-btn:hover { background: #7c3aed; }
+        
+        /* Test Management */
+        .test-header {
+            padding: 20px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        
+        .test-list {
+            flex: 1;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .test-table-header {
+            background: #f3f4f6;
+            border-bottom: 1px solid #d1d5db;
+            padding: 12px 20px;
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 3fr;
+            gap: 20px;
+            font-size: 13px;
+            font-weight: bold;
+            color: #374151;
+        }
+        
+        .test-items {
+            flex: 1;
+            overflow-y: auto;
+        }
+        
+        .test-item {
+            border-bottom: 1px solid #f3f4f6;
+            padding: 15px 20px;
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 3fr;
+            gap: 20px;
+            align-items: center;
+            transition: background 0.2s;
+        }
+        
+        .test-item:hover {
+            background: #f9fafb;
+        }
+        
+        .test-name {
+            font-size: 13px;
+            color: #374151;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .test-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+        }
+        
+        .test-actions {
+            display: flex;
+            gap: 4px;
+            flex-wrap: wrap;
+        }
+        
+        .test-action-btn {
+            padding: 5px 10px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 10px;
+            font-weight: bold;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+        
+        .run-btn {
+            background: #3b82f6;
+            color: white;
+        }
+        
+        .run-btn:hover { background: #2563eb; }
+        
+        .headed-btn {
+            background: #6b7280;
+            color: white;
+        }
+        
+        .headed-btn:hover { background: #4b5563; }
+        
+        .setup-test-btn {
+            background: #10b981;
+            color: white;
+        }
+        
+        .setup-test-btn:hover { background: #059669; }
+        
+        .report-btn {
+            background: #ef4444;
+            color: white;
+        }
+        
+        .report-btn:hover { background: #dc2626; }
+        
+        .prompt-btn {
+            background: #8b5cf6;
+            color: white;
+        }
+        
+        .prompt-btn:hover { background: #7c3aed; }
+        
+        /* Terminal Output */
+        .terminal-section {
+            position: fixed;
+            bottom: 0;
+            left: 20px;
+            right: 20px;
+            height: 300px;
+            border-top: 1px solid #e5e7eb;
+            display: flex;
+            flex-direction: column;
+            transition: height 0.3s ease;
+            z-index: 1000;
+            background: white;
+        }
+        
+        .terminal-section.minimized {
+            height: 44px;
+        }
+        
+        .terminal-header {
+            background: #1f2937;
+            color: #10b981;
+            padding: 12px 20px;
+            font-size: 14px;
+            font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .terminal-controls {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .terminal-btn {
+            padding: 6px 12px;
+            background: #6b7280;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+        }
+        
+        .terminal-btn:hover { background: #4b5563; }
+        
+        .terminal-toggle-btn {
+            font-weight: bold;
+            font-size: 14px;
+            transition: transform 0.3s ease;
+        }
+        
+        .terminal-section.minimized .terminal-toggle-btn {
+            transform: rotate(180deg);
+        }
+        
+        .terminal-output {
+            flex: 1;
+            background: #1f2937;
+            color: #d1d5db;
+            padding: 15px 20px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 12px;
+            line-height: 1.4;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            transition: opacity 0.3s ease;
+        }
+        
+        .terminal-section.minimized .terminal-output {
+            display: none;
+        }
+        
+        /* Loading and disabled states */
+        .loading {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+        
+        .disabled {
+            opacity: 0.4;
+            pointer-events: none;
+        }
+        
+        .test-action-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            background: #9ca3af !important;
+        }
+        
+        /* Utility classes */
+        .hidden { display: none; }
+        
+        .success-text { color: #10b981; }
+        .error-text { color: #ef4444; }
+        .warning-text { color: #f59e0b; }
+        
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8;
+        }
+        
+        /* Tab Navigation Styles - Right Panel */
+        .tab-navigation-right {
+            background: #f9fafb;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+        
+        .tab-button {
+            padding: 15px 25px;
+            border: none;
+            background: #f9fafb;
+            color: #6b7280;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            border-right: 1px solid #e5e7eb;
+            transition: all 0.2s;
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        
+        .tab-button:last-child {
+            border-right: none;
+        }
+        
+        .tab-button:hover {
+            background: #e5e7eb;
+            color: #374151;
+        }
+        
+        .tab-button.active {
+            background: white;
+            color: #3b82f6;
+            border-bottom: 2px solid #3b82f6;
+        }
+        
+        .tab-content-right {
+            display: none;
+            flex: 1;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        .tab-content-right.active {
+            display: flex;
+        }
+        
+        /* Test Cases Tab Styles */
+        .test-cases-header {
+            padding: 20px;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .test-cases-list {
+            flex: 1;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .test-cases-table-header {
+            background: #f3f4f6;
+            border-bottom: 1px solid #d1d5db;
+            padding: 12px 20px;
+            display: grid;
+            grid-template-columns: 2fr 1fr 0.5fr 1.5fr 1fr 1.5fr;
+            gap: 20px;
+            font-size: 13px;
+            font-weight: bold;
+            color: #374151;
+        }
+        
+        .test-cases-items {
+            flex: 1;
+            overflow-y: auto;
+        }
+        
+        .test-case-item {
+            border-bottom: 1px solid #f3f4f6;
+            padding: 15px 20px;
+            display: grid;
+            grid-template-columns: 2fr 1fr 0.5fr 1.5fr 1fr 1.5fr;
+            gap: 20px;
+            align-items: center;
+            transition: background 0.2s;
+            cursor: pointer;
+        }
+        
+        .test-case-item:hover {
+            background: #f9fafb;
+        }
+        
+        .test-case-name {
+            font-size: 13px;
+            color: #374151;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .test-case-env {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 500;
+            text-transform: uppercase;
+        }
+        
+        .test-case-env.dev {
+            background: #dcfce7;
+            color: #15803d;
+        }
+        
+        .test-case-env.staging {
+            background: #fef3c7;
+            color: #d97706;
+        }
+        
+        .test-case-env.production {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+        
+        .test-case-user {
+            font-size: 12px;
+            color: #6b7280;
+        }
+        
+        .test-case-length {
+            font-size: 12px;
+            color: #6b7280;
+        }
+
+        /* Empty state styles */
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            text-align: center;
+            color: #666;
+            padding: 40px;
+        }
+
+        .empty-state h3 {
+            margin-bottom: 8px;
+            font-size: 18px;
+        }
+
+        .empty-state p {
+            margin-bottom: 16px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Title Bar -->
+    <div class="title-bar">
+        <div class="title-text">
+            <span>🎬</span>
+            <span>Maestro Test Manager</span>
+        </div>
+        <div id="app-version">v1.0.0 | Workspace: <span id="workspace-status">Not loaded</span></div>
+    </div>
+    
+    <!-- Working Directory Selector -->
+    <div class="directory-selector">
+        <select class="env-dropdown" id="env-dropdown" onchange="selectEnvironment(this.value)">
+            <option value="dev">DEV</option>
+            <option value="staging">STAGING</option>
+            <option value="production">PRODUCTION</option>
+        </select>
+        <select class="user-dropdown" id="user-dropdown" onchange="selectUser(this.value)">
+            <option value="1">USER 1</option>
+            <option value="2">USER 2</option>
+        </select>
+        <button class="select-dir-btn" onclick="selectDirectory()">
+            📁 Select Test Directory
+        </button>
+        <div class="current-dir" id="current-dir">No directory selected</div>
+        <div class="dir-status">
+            <div class="status-indicator status-unknown" id="dir-status-indicator"></div>
+            <span id="dir-status-text">Select a directory</span>
+        </div>
+        <button class="select-dir-btn" onclick="clearWorkspace()" style="background: #6b7280;">
+            🗑️ Clear Workspace
+        </button>
+    </div>
+    
+    <!-- Main Content Layout -->
+    <div class="main-layout">
+        <!-- Left Panel - Quick Actions -->
+        <div class="left-panel-fixed">
+            <div class="panel-title">
+                🚀 Quick Actions
+            </div>
+            
+            <!-- Studio Access -->
+            <div class="action-section">
+                <div class="section-title">Maestro Studio</div>
+                <button class="action-btn codegen-btn" id="open-studio-btn" onclick="openMaestroStudio()" disabled>
+                    🎬 Open Maestro Studio
+                </button>
+            </div>
+            
+            <!-- Database Management -->
+            <div class="action-section">
+                <div class="section-title">Database</div>
+                <button class="action-btn" onclick="showDatabaseStatus()" style="background: #f59e0b; color: white;">
+                    📊 Show Database Status
+                </button>
+            </div>
+        </div>
+        
+        <!-- Right Panel - Tabs and Content -->
+        <div class="right-panel-fixed">
+            <!-- Tab Navigation -->
+            <div class="tab-navigation-right">
+                <button class="tab-button active" onclick="switchTab('tests')">
+                    🧪 Test Scripts
+                </button>
+                <button class="tab-button" onclick="switchTab('cases')">
+                    📋 Test Cases
+                </button>
+            </div>
+            
+            <!-- Tab Content: Test Scripts -->
+            <div id="tests-tab" class="tab-content-right active">
+                <div class="test-list">
+                    <div class="test-table-header">
+                        <div>Test File</div>
+                        <div>Status</div>
+                        <div>Last Run</div>
+                        <div>Actions</div>
+                    </div>
+                    
+                    <div class="test-items" id="test-items">
+                        <!-- Test items will be populated dynamically -->
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Tab Content: Test Cases -->
+            <div id="cases-tab" class="tab-content-right">
+                <div class="test-cases-header">
+                    <div class="panel-title">
+                        📋 Saved Test Cases
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <button class="action-btn" onclick="createMissingMappings()" style="background: #8b5cf6; color: white; padding: 8px 16px;">
+                            🔗 Create Missing Mappings
+                        </button>
+                        <button class="action-btn" onclick="showMappingStats()" style="background: #f59e0b; color: white; padding: 8px 16px;">
+                            📊 Mapping Stats
+                        </button>
+                        <button class="action-btn" onclick="refreshTestCases()" style="background: #3b82f6; color: white; padding: 8px 16px;">
+                            🔄 Refresh
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="test-cases-list">
+                    <div class="test-cases-table-header">
+                        <div>Test Name</div>
+                        <div>Environment</div>
+                        <div>User</div>
+                        <div>Zephyr ID</div>
+                        <div>Content Length</div>
+                        <div>Last Updated</div>
+                    </div>
+                    
+                    <div class="test-cases-items" id="test-cases-items">
+                        <!-- Test cases will be populated dynamically -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Terminal Output Section -->
+    <div class="terminal-section" id="terminal-section">
+        <div class="terminal-header">
+            <span>🖥️ Terminal Output</span>
+            <div class="terminal-controls">
+                <button class="terminal-btn" onclick="clearTerminal()">Clear</button>
+                <button class="terminal-btn" onclick="copyTerminal()">Copy</button>
+                <button class="terminal-btn terminal-toggle-btn" id="terminal-toggle-btn" onclick="toggleTerminal()">▼</button>
+            </div>
+        </div>
+        <div class="terminal-output" id="terminal-output"></div>
+    </div>
+
+    <script src="renderer.js"></script>
+</body>
 </html>

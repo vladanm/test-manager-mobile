@@ -1,7 +1,8 @@
 {
-  "name": "electron-mobile",
+  "name": "maestro-test-manager",
+  "productName": "Maestro Test Manager",
   "version": "1.0.0",
-  "description": "",
+  "description": "Desktop UI for managing Maestro React Native tests",
   "license": "ISC",
   "author": "",
   "type": "commonjs",
