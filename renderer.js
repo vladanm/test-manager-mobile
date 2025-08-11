@@ -151,12 +151,11 @@ async function loadTestData() {
     if (!currentWorkingDir) return;
     
     try {
-        // TODO(wire-cli): Replace with real file system scanning for *.yaml files
-        const scripts = await window.electronAPI.getMockTestScripts();
-        testFiles = scripts;
+        const result = await window.electronAPI.scanMaestroTests(currentWorkingDir);
+        testFiles = result.tests;
         
         updateTestList();
-        appendToTerminal(`✅ Loaded ${scripts.length} test scripts\n`, 'success');
+        appendToTerminal(`✅ ${result.message}\n`, result.tests.length > 0 ? 'success' : 'warning');
         
     } catch (error) {
         appendToTerminal(`❌ Error loading test data: ${error.message}\n`, 'error');
@@ -174,8 +173,8 @@ function updateTestList() {
     
     if (testFiles.length === 0) {
         const message = currentWorkingDir ? 
-            "No test files found. Add Maestro YAML files to get started!" :
-            "No directory selected. Select a directory to see tests.";
+            "No test files found in .maestro/flows/core/. Add Maestro YAML files to this directory to get started!" :
+            "No directory selected. Select a directory containing .maestro/flows/core/ to see tests.";
         container.innerHTML = `
             <div style="padding: 40px; text-align: center; color: #6b7280;">
                 ${message}
@@ -327,6 +326,43 @@ async function refreshTestCases() {
 async function showDatabaseStatus() {
     appendToTerminal('📊 TODO(wire-cli): Show database status and reports\n');
     showToast('TODO: show database status', 'info');
+}
+
+// Emulator restart
+async function emulatorRestart() {
+    try {
+        showToast('Restarting emulator...', 'info');
+        appendToTerminal('🔄 Starting nuclear restart process...\n', 'info');
+        
+        // Set up event listeners for streaming output
+        window.electronAPI.onEmulatorRestartOutput((event, output) => {
+            appendToTerminal(output);
+        });
+        
+        window.electronAPI.onEmulatorRestartComplete((event, result) => {
+            if (result.success) {
+                appendToTerminal('\n✅ Emulator restart completed successfully\n', 'success');
+                showToast('Emulator restarted successfully!', 'success');
+            } else {
+                appendToTerminal(`\n❌ Emulator restart failed: ${result.error}\n`, 'error');
+                showToast('Emulator restart failed', 'error');
+            }
+            
+            // Clean up event listeners
+            window.electronAPI.removeEmulatorRestartListeners();
+        });
+        
+        // Start the process
+        await window.electronAPI.emulatorRestart();
+        
+    } catch (error) {
+        appendToTerminal(`❌ Error during emulator restart: ${error.message}\n`, 'error');
+        showToast('Error restarting emulator', 'error');
+        console.error('Emulator restart error:', error);
+        
+        // Clean up event listeners in case of error
+        window.electronAPI.removeEmulatorRestartListeners();
+    }
 }
 
 // Terminal Functions
@@ -484,3 +520,4 @@ window.switchTab = switchTab;
 window.refreshTestCases = refreshTestCases;
 window.createMissingMappings = createMissingMappings;
 window.showMappingStats = showMappingStats;
+window.emulatorRestart = emulatorRestart;

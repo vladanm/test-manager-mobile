@@ -6,11 +6,25 @@ contextBridge.exposeInMainWorld('electronAPI', {
   selectTestDirectory: () => ipcRenderer.invoke('select-test-directory'),
   validateMaestroProject: (path) => ipcRenderer.invoke('validate-maestro-project', path),
   
+  // Test scanning
+  scanMaestroTests: (path) => ipcRenderer.invoke('scan-maestro-tests', path),
+  
   // Test execution (placeholder)
   runHeaded: (scriptPath, options = {}) => ipcRenderer.invoke('run-headed', scriptPath, options),
   
   // Maestro Studio integration (placeholder)  
   openMaestroStudio: () => ipcRenderer.invoke('open-maestro-studio'),
+  
+  // Emulator restart
+  emulatorRestart: () => ipcRenderer.invoke('emulator-restart'),
+  
+  // Event listeners for streaming output
+  onEmulatorRestartOutput: (callback) => ipcRenderer.on('emulator-restart-output', callback),
+  onEmulatorRestartComplete: (callback) => ipcRenderer.on('emulator-restart-complete', callback),
+  removeEmulatorRestartListeners: () => {
+    ipcRenderer.removeAllListeners('emulator-restart-output')
+    ipcRenderer.removeAllListeners('emulator-restart-complete')
+  },
   
   // Mock data for UI development
   getMockTestScripts: () => Promise.resolve([
